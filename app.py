@@ -1,11 +1,37 @@
+"""
+================================================================================
+AI MANUFACTURING DECISION COPILOT
+Sofstica Graduate Tech Development Program (SGTDP) 2026 Hackathon
+Track 1 — Supplier Shortlisting
 
+A decision-support prototype that converts a frozen manufacturing challenge
+pack (product requirements + supplier profiles + quotations + quality/
+certification evidence) into a transparent, evidence-grounded, ranked
+shortlist of eligible suppliers.
+
+DESIGN PRINCIPLES (per challenge brief safety & reliability requirements):
+  1. Decision support only — no supplier contact, no order placement, no
+     approval authority. Every consequential action requires explicit
+     human confirmation (enforced via a locked toggle in the UI).
+  2. Every material claim about a supplier is grounded in a cited source
+     document from the case pack. Nothing is presented as verified fact
+     unless it is traceable to a source with a retrieval context.
+  3. Missing, ambiguous, or conflicting data is surfaced explicitly rather
+     than silently resolved or guessed.
+  4. All uncertainty, assumptions, and confidence levels are shown next to
+     the recommendation, not buried.
+  5. Facts (extracted from case pack) are visually and structurally
+     separated from assumptions (introduced by this tool) and from
+     model-generated recommendations (ranking/scoring outputs).
+
+Run with:  streamlit run app.py
+================================================================================
+"""
 
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 import plotly.express as px
-from dataclasses import dataclass, field
-from datetime import datetime, date
+from dataclasses import dataclass
 from typing import Optional
 import hashlib
 import json
@@ -15,12 +41,22 @@ import json
 # ==============================================================================
 st.set_page_config(
     page_title="Manufacturing Decision Copilot | SGTDP 2026",
-    page_icon="⚙️", 
+    page_icon="⚙️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-
+# ==============================================================================
+# MOCK CHALLENGE PACK — SIMULATES THE ORGANIZER-SUPPLIED FROZEN CASE PACK
+# ------------------------------------------------------------------------------
+# In a real submission this data would be loaded from the versioned case pack
+# files (product_brief.json, supplier_profiles/*.pdf, quotations/*.csv, etc.)
+# with SHA-256 checksums verified against the organizer's manifest. Here it is
+# embedded as structured mock data so the prototype runs instantly with zero
+# external dependencies, while preserving the exact same source-citation
+# structure the real pipeline would use. Each fact below carries the document
+# it was "extracted" from, exactly as the brief requires for traceability.
+# ==============================================================================
 
 CASE_PACK_VERSION = "SGTDP-MFG-CASEPACK-v1.2"
 CASE_PACK_RETRIEVAL_DATE = "2026-08-08"
@@ -183,8 +219,13 @@ REFERENCE_EVALUATION = {
 
 # ==============================================================================
 # ELIGIBILITY SCREENING ENGINE
-
-
+# ------------------------------------------------------------------------------
+# Implements the brief's required "transparent eligibility screen before
+# ranking." Every constraint check is evaluated independently and recorded
+# with a pass/fail verdict, the exact numbers compared, and the source
+# document backing the supplier-side value — so a judge (or a real sourcing
+# manager) can see precisely why a supplier passed or failed.
+# ==============================================================================
 
 @dataclass
 class ConstraintCheck:
@@ -195,6 +236,21 @@ class ConstraintCheck:
     passed: bool  # True / False. Missing data uses passed=None via subclassing below
     source_doc: str
     is_data_gap: bool = False  # True if we could not verify due to missing info
+
+
+def _capability_set(cap_string: str) -> set:
+    """
+    Parses a capability string ('CNC Machining + Injection Molding',
+    'CNC Machining only', 'Injection Molding only') into a set of atomic
+    capabilities, e.g. {'CNC Machining', 'Injection Molding'} or
+    {'CNC Machining'}. Stripping the ' only' suffix before splitting on '+'
+    means both compound and single-capability strings normalize to the same
+    representation, so they can be compared with a proper subset check
+    instead of a raw substring search (which breaks on 'only' — see
+    screen_supplier's Check 1 for why that matters).
+    """
+    cleaned = cap_string.replace(" only", "").strip()
+    return {part.strip() for part in cleaned.split("+") if part.strip()}
 
 
 def screen_supplier(supplier: dict, requirements: dict) -> dict:
@@ -216,10 +272,16 @@ def screen_supplier(supplier: dict, requirements: dict) -> dict:
     # --- Check 1: Manufacturing capability -----------------------------------
     required_cap = requirements["capability"]
     supplier_cap = supplier["capability"]
-    # Capability passes if the supplier's stated capability covers the
-    # required capability (exact match or superset, e.g. "CNC + Injection"
-    # covers a requirement of just "CNC Machining").
-    cap_pass = all(part.strip() in supplier_cap for part in required_cap.split("+"))
+    # Capability passes if everything the product REQUIRES is a subset of
+    # what the supplier CAN do, e.g. a supplier offering "CNC Machining +
+    # Injection Molding" satisfies a requirement of just "CNC Machining
+    # only" — extra capability must never disqualify a supplier. (The
+    # previous raw-substring check only handled the "+" compound case and
+    # incorrectly failed qualified suppliers whenever the requirement was
+    # one of the "... only" options, since e.g. the literal string "CNC
+    # Machining only" is not a substring of "CNC Machining + Injection
+    # Molding".)
+    cap_pass = _capability_set(required_cap).issubset(_capability_set(supplier_cap))
     checks.append(ConstraintCheck(
         constraint_name="Manufacturing Capability",
         required_value=required_cap,
@@ -231,7 +293,21 @@ def screen_supplier(supplier: dict, requirements: dict) -> dict:
     # --- Check 2: ISO Certification ------------------------------------------
     required_iso = requirements["min_iso_certification"]
     supplier_isos = supplier["iso_certifications"]
-    if len(supplier_isos) == 0 and supplier["data_quality"] == "missing_certification_data":
+    if required_iso is None:
+        # No ISO requirement is active for this product (sidebar toggle is
+        # off) — the check auto-passes. We still show what's on file for
+        # transparency. Without this branch, `required_iso in supplier_isos`
+        # evaluates as `None in [...]`, which is always False — silently
+        # failing every supplier's ISO check even when the requirement was
+        # explicitly turned off. That inverted the toggle's meaning.
+        checks.append(ConstraintCheck(
+            constraint_name="ISO Certification",
+            required_value="Not required",
+            supplier_value=", ".join(supplier_isos) if supplier_isos else "None listed",
+            passed=True,
+            source_doc=supplier["source_doc"],
+        ))
+    elif len(supplier_isos) == 0 and supplier["data_quality"] == "missing_certification_data":
         # Explicit data gap — do not fail, do not pass. Flag for human review.
         checks.append(ConstraintCheck(
             constraint_name="ISO Certification",
@@ -372,7 +448,10 @@ def compute_ranking_score(supplier: dict, weights: dict) -> dict:
 
 # ==============================================================================
 # EVALUATION METRICS — REQUIRED BY THE BRIEF'S EVALUATION PROTOCOL
-
+# ------------------------------------------------------------------------------
+# Computes the exact metric set the challenge brief asks teams to report:
+# mandatory-constraint satisfaction rate, citation coverage, unsupported-claim
+# rate, and agreement with the organizer's reference evaluation.
 # ==============================================================================
 
 def compute_evaluation_metrics(screening_results: list) -> dict:
