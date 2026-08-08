@@ -1,32 +1,3 @@
-"""
-================================================================================
-AI MANUFACTURING DECISION COPILOT
-Sofstica Graduate Tech Development Program (SGTDP) 2026 Hackathon
-Track 1 — Supplier Shortlisting
-
-A decision-support prototype that converts a frozen manufacturing challenge
-pack (product requirements + supplier profiles + quotations + quality/
-certification evidence) into a transparent, evidence-grounded, ranked
-shortlist of eligible suppliers.
-
-DESIGN PRINCIPLES (per challenge brief safety & reliability requirements):
-  1. Decision support only — no supplier contact, no order placement, no
-     approval authority. Every consequential action requires explicit
-     human confirmation (enforced via a locked toggle in the UI).
-  2. Every material claim about a supplier is grounded in a cited source
-     document from the case pack. Nothing is presented as verified fact
-     unless it is traceable to a source with a retrieval context.
-  3. Missing, ambiguous, or conflicting data is surfaced explicitly rather
-     than silently resolved or guessed. 
-  4. All uncertainty, assumptions, and confidence levels are shown next to
-     the recommendation, not buried.
-  5. Facts (extracted from case pack) are visually and structurally
-     separated from assumptions (introduced by this tool) and from
-     model-generated recommendations (ranking/scoring outputs).
-
-Run with:  streamlit run app.py
-================================================================================
-"""
 
 
 import streamlit as st
@@ -49,17 +20,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ==============================================================================
-# MOCK CHALLENGE PACK — SIMULATES THE ORGANIZER-SUPPLIED FROZEN CASE PACK
-# ------------------------------------------------------------------------------
-# In a real submission this data would be loaded from the versioned case pack
-# files (product_brief.json, supplier_profiles/*.pdf, quotations/*.csv, etc.)
-# with SHA-256 checksums verified against the organizer's manifest. Here it is
-# embedded as structured mock data so the prototype runs instantly with zero
-# external dependencies, while preserving the exact same source-citation
-# structure the real pipeline would use. Each fact below carries the document
-# it was "extracted" from, exactly as the brief requires for traceability.
-# ==============================================================================
+
 
 CASE_PACK_VERSION = "SGTDP-MFG-CASEPACK-v1.2"
 CASE_PACK_RETRIEVAL_DATE = "2026-08-08"
@@ -222,13 +183,8 @@ REFERENCE_EVALUATION = {
 
 # ==============================================================================
 # ELIGIBILITY SCREENING ENGINE
-# ------------------------------------------------------------------------------
-# Implements the brief's required "transparent eligibility screen before
-# ranking." Every constraint check is evaluated independently and recorded
-# with a pass/fail verdict, the exact numbers compared, and the source
-# document backing the supplier-side value — so a judge (or a real sourcing
-# manager) can see precisely why a supplier passed or failed.
-# ==============================================================================
+
+
 
 @dataclass
 class ConstraintCheck:
@@ -416,10 +372,7 @@ def compute_ranking_score(supplier: dict, weights: dict) -> dict:
 
 # ==============================================================================
 # EVALUATION METRICS — REQUIRED BY THE BRIEF'S EVALUATION PROTOCOL
-# ------------------------------------------------------------------------------
-# Computes the exact metric set the challenge brief asks teams to report:
-# mandatory-constraint satisfaction rate, citation coverage, unsupported-claim
-# rate, and agreement with the organizer's reference evaluation.
+
 # ==============================================================================
 
 def compute_evaluation_metrics(screening_results: list) -> dict:
