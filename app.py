@@ -15,7 +15,7 @@ import json
 # ==============================================================================
 st.set_page_config(
     page_title="Manufacturing Decision Copilot | SGTDP 2026",
-    page_icon="⚙️",
+    page_icon="⚙️", 
     layout="wide",
     initial_sidebar_state="expanded",
 )
