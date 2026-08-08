@@ -17,7 +17,7 @@ DESIGN PRINCIPLES (per challenge brief safety & reliability requirements):
      document from the case pack. Nothing is presented as verified fact
      unless it is traceable to a source with a retrieval context.
   3. Missing, ambiguous, or conflicting data is surfaced explicitly rather
-     than silently resolved or guessed.
+     than silently resolved or guessed. 
   4. All uncertainty, assumptions, and confidence levels are shown next to
      the recommendation, not buried.
   5. Facts (extracted from case pack) are visually and structurally
